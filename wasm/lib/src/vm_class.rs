@@ -16,6 +16,8 @@ use std::{
     rc::{Rc, Weak},
 };
 use wasm_bindgen::prelude::*;
+use std::borrow::Cow;
+use rustpython_vm::stdlib;
 
 pub(crate) struct StoredVirtualMachine {
     pub interp: Interpreter,
@@ -39,8 +41,45 @@ fn init_window_module(vm: &VirtualMachine) -> PyRef<PyModule> {
 }
 
 impl StoredVirtualMachine {
-    fn new<I>(id: String, inject_browser_module: bool, iter: I) -> StoredVirtualMachine where
+    fn new_with_args<I>(id: String, inject_browser_module: bool, iter: I) -> StoredVirtualMachine where
     I: IntoIterator<Item = (Cow<'static, str>, stdlib::StdlibInitFunc)> {
+        let mut scope = None;
+        let mut settings = Settings::default();
+        settings.allow_external_library = false;
+        let interp = Interpreter::with_init(settings, |vm| {
+            #[cfg(feature = "freeze-stdlib")]
+            vm.add_native_modules(rustpython_stdlib::get_module_inits());
+
+            vm.add_native_modules(iter);
+
+            #[cfg(feature = "freeze-stdlib")]
+            vm.add_frozen(rustpython_pylib::FROZEN_STDLIB);
+
+            vm.wasm_id = Some(id);
+
+            js_module::setup_js_module(vm);
+            if inject_browser_module {
+                vm.add_native_module("_window".to_owned(), Box::new(init_window_module));
+                setup_browser_module(vm);
+            }
+
+            VM_INIT_FUNCS.with(|cell| {
+                for f in cell.borrow().iter() {
+                    f(vm)
+                }
+            });
+
+            scope = Some(vm.new_scope_with_builtins());
+        });
+
+        StoredVirtualMachine {
+            interp,
+            scope: scope.unwrap(),
+            held_objects: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn new(id: String, inject_browser_module: bool) -> StoredVirtualMachine {
         let mut scope = None;
         let mut settings = Settings::default();
         settings.allow_external_library = false;
@@ -114,13 +153,25 @@ pub struct VMStore;
 
 //#[wasm_bindgen(js_class = vmStore)]
 impl VMStore {
-    pub fn init<I>(id: String, inject_browser_module: Option<bool>, iter: I) -> WASMVirtualMachine where
+    pub fn init_with_args<I>(id: String, inject_browser_module: Option<bool>, iter: I) -> WASMVirtualMachine where
     I: IntoIterator<Item = (Cow<'static, str>, stdlib::StdlibInitFunc)>{
         STORED_VMS.with(|cell| {
             let mut vms = cell.borrow_mut();
             if !vms.contains_key(&id) {
                 let stored_vm =
-                    StoredVirtualMachine::new(id.clone(), inject_browser_module.unwrap_or(true), iter);
+                    StoredVirtualMachine::new_with_args(id.clone(), inject_browser_module.unwrap_or(true), iter);
+                vms.insert(id.clone(), Rc::new(stored_vm));
+            }
+        });
+        WASMVirtualMachine { id }
+    }
+
+    pub fn init(id: String, inject_browser_module: Option<bool>) -> WASMVirtualMachine {
+        STORED_VMS.with(|cell| {
+            let mut vms = cell.borrow_mut();
+            if !vms.contains_key(&id) {
+                let stored_vm =
+                    StoredVirtualMachine::new(id.clone(), inject_browser_module.unwrap_or(true));
                 vms.insert(id.clone(), Rc::new(stored_vm));
             }
         });
