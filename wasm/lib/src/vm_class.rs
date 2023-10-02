@@ -112,7 +112,7 @@ pub(crate) fn weak_vm(vm: &VirtualMachine) -> Weak<StoredVirtualMachine> {
 #[wasm_bindgen(js_name = vmStore)]
 pub struct VMStore;
 
-#[wasm_bindgen(js_class = vmStore)]
+//#[wasm_bindgen(js_class = vmStore)]
 impl VMStore {
     pub fn init<I>(id: String, inject_browser_module: Option<bool>, iter: I) -> WASMVirtualMachine where
     I: IntoIterator<Item = (Cow<'static, str>, stdlib::StdlibInitFunc)>{
