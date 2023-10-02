@@ -114,7 +114,7 @@ pub struct VMStore;
 
 #[wasm_bindgen(js_class = vmStore)]
 impl VMStore {
-    pub fn init<i>(id: String, inject_browser_module: Option<bool>, iter: I) -> WASMVirtualMachine where
+    pub fn init<I>(id: String, inject_browser_module: Option<bool>, iter: I) -> WASMVirtualMachine where
     I: IntoIterator<Item = (Cow<'static, str>, stdlib::StdlibInitFunc)>{
         STORED_VMS.with(|cell| {
             let mut vms = cell.borrow_mut();
