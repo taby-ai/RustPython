@@ -120,7 +120,7 @@ impl VMStore {
             let mut vms = cell.borrow_mut();
             if !vms.contains_key(&id) {
                 let stored_vm =
-                    StoredVirtualMachine::new(id.clone(), inject_browser_module.unwrap_or(true));
+                    StoredVirtualMachine::new(id.clone(), inject_browser_module.unwrap_or(true), iter);
                 vms.insert(id.clone(), Rc::new(stored_vm));
             }
         });
